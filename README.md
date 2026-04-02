@@ -4,6 +4,9 @@
 
 **Docker Package Updater**
 
+<img width="1544" height="888" alt="image" src="https://github.com/user-attachments/assets/de21e756-bcbd-49b3-b605-809982c3abd2" />
+
+
 *Keep your Docker project dependencies safe, updated, and under control.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
