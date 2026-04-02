@@ -879,6 +879,7 @@
             bar.classList.remove('rebuild');
             showProgress(false);
             if (result?.self_rebuild) {
+                removePendingRebuild(name);
                 showToast('Self-rebuild initiated! Duptator will restart in ~30 seconds...', 'success');
                 if (result?.log) { showBuildLog(name, result); }
                 let countdown = 30;
