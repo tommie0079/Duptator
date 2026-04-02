@@ -1277,11 +1277,78 @@ class DockerPackageUpdater:
         except Exception:
             return False
 
+    def _is_self(self, project: Project) -> bool:
+        """Check if this project is Duptator itself."""
+        try:
+            hostname = os.environ.get('HOSTNAME', '')
+            result = subprocess.run(
+                ["docker", "inspect", "--format", "{{.Id}}", "docker-updater"],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                container_id = result.stdout.strip()
+                if hostname and container_id.startswith(hostname):
+                    return True
+            # Fallback: check if the compose file is ours
+            compose_path = str(project.docker_compose_file or "")
+            if "docker-updater" in compose_path:
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _self_rebuild(self, project: Project) -> Dict:
+        """Rebuild Duptator itself using a detached helper container."""
+        compose_dir = str(project.path)
+        compose_file = str(project.docker_compose_file)
+        uses_build = self._has_build_directive(project)
+
+        if uses_build:
+            build_step = "docker compose -f {cf} build --no-cache &&".format(cf=compose_file)
+        else:
+            build_step = "docker compose -f {cf} pull &&".format(cf=compose_file)
+
+        script = (
+            "sleep 2 && "
+            "{build} "
+            "docker compose -f {cf} down --remove-orphans; "
+            "docker rm -f docker-updater 2>/dev/null; "
+            "docker compose -f {cf} up -d"
+        ).format(build=build_step, cf=compose_file)
+
+        try:
+            result = subprocess.run(
+                [
+                    "docker", "run", "-d", "--rm",
+                    "--name", "duptator-rebuilder",
+                    "-v", "/var/run/docker.sock:/var/run/docker.sock",
+                    "-v", "{d}:{d}".format(d=compose_dir),
+                    "-w", compose_dir,
+                    "docker:cli", "sh", "-c", script
+                ],
+                capture_output=True, text=True, timeout=30
+            )
+            if result.returncode == 0:
+                return {
+                    "success": True,
+                    "self_rebuild": True,
+                    "message": "Self-rebuild initiated. Duptator will restart in ~30 seconds. The page will reload automatically.",
+                    "log": "Spawned helper container for self-rebuild.\n" + result.stdout
+                }
+            else:
+                return {"success": False, "message": "Failed to start rebuild helper", "log": result.stderr}
+        except Exception as e:
+            return {"success": False, "message": str(e), "log": ""}
+
     def rebuild_container(self, project: Project) -> Dict:
         """Rebuild a Docker container."""
         if not project.docker_compose_file:
             return {"success": False, "message": "No docker-compose file found", "log": ""}
-        
+
+        # Self-rebuild: delegate to a detached helper container
+        if self._is_self(project):
+            return self._self_rebuild(project)
+
         uses_build = self._has_build_directive(project)
         log_lines = []
         

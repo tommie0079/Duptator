@@ -878,6 +878,20 @@
             const result = await fetchAPI(`rebuild/${name}`, { method: 'POST' });
             bar.classList.remove('rebuild');
             showProgress(false);
+            if (result?.self_rebuild) {
+                showToast('Self-rebuild initiated! Duptator will restart in ~30 seconds...', 'success');
+                if (result?.log) { showBuildLog(name, result); }
+                let countdown = 30;
+                const interval = setInterval(() => {
+                    countdown--;
+                    document.getElementById('log-message').textContent = `Restarting... page will reload in ${countdown}s`;
+                    if (countdown <= 0) {
+                        clearInterval(interval);
+                        location.reload();
+                    }
+                }, 1000);
+                return;
+            }
             if (result?.success) {
                 removePendingRebuild(name);
                 renderProjects();
