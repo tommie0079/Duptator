@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  docker-updater:
+    build: .
+    container_name: docker-updater
+    restart: unless-stopped
+    ports:
+      - "4554:8080"  # Exposed on port 4554 for direct LAN access
+    volumes:
+      # Mount Docker socket to manage containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount the NAS volume root for browsing (adjust for your NAS)
+      - /volume1:/volume1:rw
+      # Persist backups and config
+      - updater-data:/app/data
+    environment:
+      - PROJECTS_PATH=/volume1/docker
+      - CONFIG_FILE=/app/data/config.json
+      - BACKUP_DIR=/app/data/backups
+    networks:
+      - updater-net
+
+volumes:
+  updater-data:
+
+networks:
+  updater-net:
+    driver: bridge
