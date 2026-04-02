@@ -1393,6 +1393,14 @@ class DockerPackageUpdater:
                 
                 log_lines.append(f"\n=== Restarting {project.name} ===\n")
                 down_result = run_step(cmd, ["-f", project.docker_compose_file, "down", "--remove-orphans"], timeout=120)
+                # Force-remove any stale containers that survived 'down'
+                ps_result = subprocess.run(
+                    cmd + ["-f", project.docker_compose_file, "ps", "-a", "-q"],
+                    capture_output=True, text=True, timeout=15, cwd=project.path
+                )
+                if ps_result.returncode == 0 and ps_result.stdout.strip():
+                    for cid in ps_result.stdout.strip().splitlines():
+                        run_step(["docker"], ["rm", "-f", cid], timeout=15)
                 up_result = run_step(cmd, ["-f", project.docker_compose_file, "up", "-d"], timeout=120)
                 if up_result.returncode == 0:
                     action = "rebuilt" if uses_build else "pulled & restarted"
