@@ -1281,18 +1281,21 @@ class DockerPackageUpdater:
         """Check if this project is Duptator itself."""
         try:
             hostname = os.environ.get('HOSTNAME', '')
+            if not hostname:
+                return False
+            # List containers belonging to THIS project
+            compose_file = str(project.docker_compose_file or "")
+            if not compose_file:
+                return False
             result = subprocess.run(
-                ["docker", "inspect", "--format", "{{.Id}}", "docker-updater"],
-                capture_output=True, text=True, timeout=10
+                ["docker", "compose", "-f", compose_file, "ps", "-q"],
+                capture_output=True, text=True, timeout=10,
+                cwd=str(project.path)
             )
             if result.returncode == 0:
-                container_id = result.stdout.strip()
-                if hostname and container_id.startswith(hostname):
-                    return True
-            # Fallback: check if the compose file is ours
-            compose_path = str(project.docker_compose_file or "")
-            if "docker-updater" in compose_path:
-                return True
+                for cid in result.stdout.strip().splitlines():
+                    if cid.startswith(hostname) or hostname.startswith(cid[:12]):
+                        return True
         except Exception:
             pass
         return False
