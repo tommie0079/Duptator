@@ -948,6 +948,16 @@ class DockerPackageUpdater:
                         pkg = pkg_lookup[name]
                         current = pkg_json[dep_type][name]
                         prefix = '^' if current.startswith('^') else ('~' if current.startswith('~') else '')
+                        # Respect semver: ^ allows minor/patch, ~ allows patch only
+                        cur_ver = current.lstrip('^~')
+                        new_ver = pkg.latest_version
+                        cur_parts = cur_ver.split('.')
+                        new_parts = new_ver.split('.')
+                        if len(cur_parts) >= 1 and len(new_parts) >= 1:
+                            if prefix == '^' and cur_parts[0] != new_parts[0]:
+                                continue  # Skip major version bumps for ^
+                            if prefix == '~' and (cur_parts[0] != new_parts[0] or (len(cur_parts) > 1 and len(new_parts) > 1 and cur_parts[1] != new_parts[1])):
+                                continue  # Skip major/minor version bumps for ~
                         pkg_json[dep_type][name] = f"{prefix}{pkg.latest_version}"
         
         with open(project.dependency_file, 'w') as f:
@@ -973,6 +983,16 @@ class DockerPackageUpdater:
                         pkg = pkg_lookup[name]
                         current = composer_json[dep_type][name]
                         prefix = '^' if current.startswith('^') else ('~' if current.startswith('~') else '')
+                        # Respect semver: ^ allows minor/patch, ~ allows patch only
+                        cur_ver = current.lstrip('^~')
+                        new_ver = pkg.latest_version
+                        cur_parts = cur_ver.split('.')
+                        new_parts = new_ver.split('.')
+                        if len(cur_parts) >= 1 and len(new_parts) >= 1:
+                            if prefix == '^' and cur_parts[0] != new_parts[0]:
+                                continue
+                            if prefix == '~' and (cur_parts[0] != new_parts[0] or (len(cur_parts) > 1 and len(new_parts) > 1 and cur_parts[1] != new_parts[1])):
+                                continue
                         composer_json[dep_type][name] = f"{prefix}{pkg.latest_version}"
         
         with open(project.dependency_file, 'w') as f:
