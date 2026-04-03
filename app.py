@@ -12,6 +12,12 @@ logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
 
+@app.after_request
+def add_no_cache(response):
+    if 'text/html' in response.content_type:
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
+
 from routes import register_routes
 register_routes(app)
 
