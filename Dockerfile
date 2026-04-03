@@ -22,7 +22,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
-COPY app.py .
+COPY app.py config.py models.py scanners.py updaters.py containers.py backups.py routes.py ./
 COPY templates templates/
 
 # Create data directory for persistent config and backups
