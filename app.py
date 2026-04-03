@@ -1430,6 +1430,7 @@ class DockerPackageUpdater:
                 log_lines.append(f"\n=== Restarting {project.name} ===\n")
                 down_result = run_step(cmd, ["-f", project.docker_compose_file, "down", "--remove-orphans"], timeout=120)
                 # Force-remove any stale containers that survived 'down'
+                # Use 'docker compose ps -a -q' first
                 ps_result = subprocess.run(
                     cmd + ["-f", project.docker_compose_file, "ps", "-a", "-q"],
                     capture_output=True, text=True, timeout=15, cwd=project.path
@@ -1437,6 +1438,20 @@ class DockerPackageUpdater:
                 if ps_result.returncode == 0 and ps_result.stdout.strip():
                     for cid in ps_result.stdout.strip().splitlines():
                         run_step(["docker"], ["rm", "-f", cid], timeout=15)
+                # Also try 'docker compose config --services' to get service names
+                # and remove containers by project-service naming convention
+                svc_result = subprocess.run(
+                    cmd + ["-f", project.docker_compose_file, "config", "--services"],
+                    capture_output=True, text=True, timeout=15, cwd=project.path
+                )
+                if svc_result.returncode == 0 and svc_result.stdout.strip():
+                    proj_name = project.name.lower().replace(' ', '-')
+                    for svc in svc_result.stdout.strip().splitlines():
+                        for pattern in [f"{proj_name}-{svc}-1", f"{proj_name}-{svc}", svc]:
+                            subprocess.run(
+                                ["docker", "rm", "-f", pattern],
+                                capture_output=True, text=True, timeout=10
+                            )
                 up_result = run_step(cmd, ["-f", project.docker_compose_file, "up", "-d"], timeout=120)
                 if up_result.returncode == 0:
                     action = "rebuilt" if uses_build else "pulled & restarted"
