@@ -754,6 +754,8 @@
                 const idx = projects.findIndex(p => p.name === name);
                 if (idx >= 0) {
                     projects[idx] = result;
+                    // If scan shows 0 outdated, the rebuild already happened — clear the flag
+                    if (result.outdated_count === 0) { removePendingRebuild(name); }
                     renderProjects();
                     updateStats();
                     showToast(`${name}: ${result.outdated_count} outdated`);
@@ -791,6 +793,7 @@
                 if (result) {
                     const idx = projects.findIndex(x => x.name === p.name);
                     if (idx >= 0) { projects[idx] = result; outdated += result.outdated_count || 0; }
+                    if (result.outdated_count === 0) { removePendingRebuild(p.name); }
                 }
                 renderProjects();
                 updateStats();
