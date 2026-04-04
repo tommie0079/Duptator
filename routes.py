@@ -187,6 +187,8 @@ def register_routes(app):
             scan_project(project)
 
         success = update_project(project, create_backup)
+        if success:
+            scan_project(project)
         return jsonify({
             "success": success,
             "project": project.to_dict()
@@ -209,6 +211,8 @@ def register_routes(app):
             scan_project(project)
 
         success = update_single_package(project, package_name, create_backup)
+        if success:
+            scan_project(project)
         return jsonify({
             "success": success,
             "project": project.to_dict()
