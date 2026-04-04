@@ -194,6 +194,9 @@
         .stale-flag { color: var(--warning); font-size: 12px; }
         .stale-flag .flag-icon { font-size: 14px; }
         .stale-date { color: var(--text-secondary); font-size: 11px; }
+        .vuln-flag { color: #ff4444; font-weight: 700; font-size: 12px; }
+        .vuln-row { background: rgba(255, 68, 68, 0.08) !important; border-left: 3px solid #ff4444; }
+        .vuln-badge { background: #ff4444; color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; }
         
         /* Modals */
         .modal {
@@ -492,6 +495,10 @@
                 <div class="label">Stale (6mo+)</div>
             </div>
             <div class="stat-card">
+                <div class="number" style="color: #ff4444" id="vulnerable-packages">-</div>
+                <div class="label">Vulnerable</div>
+            </div>
+            <div class="stat-card">
                 <div class="number" id="scanned-projects">-</div>
                 <div class="label">Scanned</div>
             </div>
@@ -700,14 +707,16 @@
                                 <th>Action</th>
                             </tr></thead>
                             <tbody>
-                                ${p.packages.map(pkg => `<tr>
-                                    <td><strong>${pkg.name}</strong>${pkg.package_manager !== p.package_manager ? ` <span class="badge docker" style="font-size:10px;padding:1px 5px;">docker</span>` : ''}</td>
+                                ${p.packages.map(pkg => `<tr class="${pkg.is_vulnerable ? 'vuln-row' : ''}">
+                                    <td><strong>${pkg.name}</strong>${pkg.is_vulnerable ? ' <span class="vuln-badge">MALWARE</span>' : ''}${pkg.package_manager !== p.package_manager ? ` <span class="badge docker" style="font-size:10px;padding:1px 5px;">docker</span>` : ''}</td>
                                     <td class="version-current">${pkg.current_version}</td>
                                     <td class="${pkg.is_outdated ? 'version-latest' : 'version-match'}">${pkg.latest_version}</td>
                                     <td>${pkg.last_updated 
                                         ? `<span class="${pkg.is_stale ? 'stale-flag' : 'stale-date'}">${pkg.is_stale ? '⚠️ ' : ''}${pkg.last_updated}</span>` 
                                         : '<span class="stale-date">—</span>'}</td>
-                                    <td>${pkg.is_outdated 
+                                    <td>${pkg.is_vulnerable
+                                        ? `<span class="vuln-flag">☠ ${pkg.vulnerability_note}</span>`
+                                        : pkg.is_outdated 
                                         ? '<span class="version-arrow">⬆ outdated</span>' 
                                         : pkg.is_stale 
                                             ? '<span class="stale-flag"><span class="flag-icon">⚠</span> stale</span>'
@@ -741,7 +750,12 @@
             document.getElementById('total-packages').textContent = projects.reduce((s, p) => s + (p.total_packages || 0), 0);
             document.getElementById('outdated-packages').textContent = projects.reduce((s, p) => s + (p.outdated_count || 0), 0);
             document.getElementById('stale-packages').textContent = projects.reduce((s, p) => s + (p.stale_count || 0), 0);
-            document.getElementById('scanned-projects').textContent = projects.filter(p => p.status === 'scanned').length;
+            const vulnCount = projects.reduce((s, p) => s + (p.vulnerable_count || 0), 0);
+            const scannedCount = projects.filter(p => p.status === 'scanned').length;
+            const vulnEl = document.getElementById('vulnerable-packages');
+            vulnEl.textContent = scannedCount > 0 ? vulnCount : '-';
+            vulnEl.style.color = vulnCount > 0 ? '#ff4444' : 'var(--success)';
+            document.getElementById('scanned-projects').textContent = scannedCount;
         }
         
         async function scanProject(name) {

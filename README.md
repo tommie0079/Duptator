@@ -28,6 +28,8 @@ This project was born out of the [npm supply chain attacks](https://en.wikipedia
 
 Duptator was built to solve a simple problem: **keeping dependencies up-to-date shouldn't be hard.** Whether you run 5 or 50 Docker projects on your NAS, Duptator gives you a single dashboard to scan, update, and rollback packages — safely and instantly.
 
+It also includes a **built-in malware detection database** that flags known compromised package versions from major supply chain attacks, including the [axios RAT](https://socket.dev/blog/axios-npm-package-compromised) (Mar 2026), [Qix account compromise](https://socket.dev/blog/npm-author-qix-compromised-in-major-supply-chain-attack) (Sep 2025), [node-ipc protestware](https://en.wikipedia.org/wiki/Peacenotwar) (Mar 2022), and more.
+
 > **Stay updated. Stay secure.** 🛡️
 
 ---
@@ -39,6 +41,7 @@ Duptator was built to solve a simple problem: **keeping dependencies up-to-date 
 | 🔍 **Scan** | Discover outdated packages across all Docker projects |
 | ⬆️ **Update All** | One-click bulk update with automatic backups |
 | 🎯 **Per-Package Update** | Expand any project row and update individual packages |
+| 🛡️ **Malware Detection** | Flags known compromised package versions from major supply chain attacks |
 | ⚠️ **Stale Detection** | Yellow flag warning for packages not updated in 6+ months |
 | ↩️ **Rollback** | Instantly restore previous dependency versions |
 | 🔨 **Rebuild** | Rebuild or pull + restart containers (auto-detects `build:` vs `image:`) |
@@ -142,6 +145,7 @@ Navigate to **`http://your-server-ip:4554`**
 | Action | What happens |
 |--------|-------------|
 | **Scan** | Finds all `docker-compose.yml` files, reads dependency files, checks latest versions via registry APIs |
+| **Malware Check** | Compares installed versions against a built-in database of known compromised releases (axios, chalk, event-stream, node-ipc, ua-parser-js, etc.) |
 | **Update All** | Creates timestamped backups, writes new version numbers to all outdated packages across projects |
 | **Update Single** | Expand a project row → click Update on an individual package → only that package is updated |
 | **Stale Check** | Flags packages whose latest version was published 6+ months ago with a ⚠️ warning |
