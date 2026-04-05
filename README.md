@@ -20,7 +20,8 @@
 </div>
 
 ---
-<img width="1544" height="888" alt="image" src="https://github.com/user-attachments/assets/de21e756-bcbd-49b3-b605-809982c3abd2" />
+<img width="1730" height="1037" alt="image" src="https://github.com/user-attachments/assets/fb673da6-c2c7-43d1-b161-d630f6e34eb4" />
+
 
 ## 💡 Motivation
 
