@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 _connections = {}
 
 
+def _win_to_sftp_path(path: str) -> str:
+    """Convert Windows path to SFTP-compatible path (forward slashes)."""
+    return path.replace('\\', '/')
+
+
 def get_ssh(host: Host) -> paramiko.SSHClient:
     """Get or create an SSH connection for a host."""
     if host.id in _connections:
@@ -99,8 +104,9 @@ def ssh_read_file(host: Host, remote_path: str) -> Optional[str]:
     try:
         ssh = get_ssh(host)
         sftp = ssh.open_sftp()
+        sftp_path = _win_to_sftp_path(remote_path) if host.host_type == 'windows' else remote_path
         try:
-            with sftp.open(remote_path, 'r') as f:
+            with sftp.open(sftp_path, 'r') as f:
                 content = f.read().decode(errors='replace')
             return content
         finally:
@@ -118,8 +124,9 @@ def ssh_write_file(host: Host, remote_path: str, content: str):
     try:
         ssh = get_ssh(host)
         sftp = ssh.open_sftp()
+        sftp_path = _win_to_sftp_path(remote_path) if host.host_type == 'windows' else remote_path
         try:
-            with sftp.open(remote_path, 'w') as f:
+            with sftp.open(sftp_path, 'w') as f:
                 f.write(content)
         finally:
             sftp.close()
@@ -133,9 +140,10 @@ def ssh_list_dirs(host: Host, path: str) -> List[str]:
     try:
         ssh = get_ssh(host)
         sftp = ssh.open_sftp()
+        sftp_path = _win_to_sftp_path(path) if host.host_type == 'windows' else path
         try:
             items = []
-            for attr in sftp.listdir_attr(path):
+            for attr in sftp.listdir_attr(sftp_path):
                 if attr.st_mode and (attr.st_mode & 0o40000):  # is directory
                     if not attr.filename.startswith('.'):
                         items.append(attr.filename)
@@ -152,8 +160,9 @@ def ssh_path_exists(host: Host, path: str) -> bool:
     try:
         ssh = get_ssh(host)
         sftp = ssh.open_sftp()
+        sftp_path = _win_to_sftp_path(path) if host.host_type == 'windows' else path
         try:
-            sftp.stat(path)
+            sftp.stat(sftp_path)
             return True
         except FileNotFoundError:
             return False
@@ -168,8 +177,9 @@ def ssh_is_dir(host: Host, path: str) -> bool:
     try:
         ssh = get_ssh(host)
         sftp = ssh.open_sftp()
+        sftp_path = _win_to_sftp_path(path) if host.host_type == 'windows' else path
         try:
-            attr = sftp.stat(path)
+            attr = sftp.stat(sftp_path)
             return bool(attr.st_mode and (attr.st_mode & 0o40000))
         except FileNotFoundError:
             return False
@@ -185,8 +195,9 @@ def ssh_find_compose_files(host: Host, base_path: str) -> List[str]:
     skip_dirs = ["node_modules", "vendor", ".git", ".package-backups", "logging-proxy"]
 
     if host.host_type == "windows":
-        # Windows: use dir command
-        cmd = f'dir /s /b "{base_path}\\docker-compose.yml" "{base_path}\\docker-compose.yaml" "{base_path}\\compose.yml" "{base_path}\\compose.yaml" 2>nul'
+        # Windows: use dir /s /b per pattern, combined with &
+        cmds = [f'dir /s /b "{base_path}\\{p}" 2>nul' for p in patterns]
+        cmd = ' & '.join(cmds)
     else:
         # Unix: use find command
         name_args = " -o ".join(f'-name "{p}"' for p in patterns)

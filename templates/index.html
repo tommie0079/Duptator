@@ -1386,7 +1386,7 @@
         async function browseUp() { if (currentBrowsePath === '/') return; const p = currentBrowsePath.split('/').filter(x=>x); p.pop(); await loadFolders('/' + p.join('/') || '/'); }
         function selectCurrentPath() { document.getElementById('projects-path').value = currentBrowsePath; closeBrowser(); }
         
-        document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m && m.id !== 'log-modal') m.classList.remove('active'); }));
+        document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m && m.id !== 'log-modal' && m.id !== 'host-modal') m.classList.remove('active'); }));
         updateRebuildBanner();
         loadHosts().then(() => refreshProjects());
     </script>
