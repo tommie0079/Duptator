@@ -492,6 +492,19 @@
             transition: color 0.2s;
         }
         .host-tab-add:hover { color: var(--accent); }
+        .host-tab .host-tab-close {
+            margin-left: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            opacity: 0;
+            transition: opacity 0.15s, color 0.15s;
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 3px;
+            line-height: 1;
+        }
+        .host-tab:hover .host-tab-close { opacity: 0.7; }
+        .host-tab .host-tab-close:hover { opacity: 1; color: var(--danger, #f85149); background: rgba(248,81,73,0.1); }
         .host-status {
             width: 8px;
             height: 8px;
@@ -774,6 +787,7 @@
                     <span class="host-type-icon">${h.icon}</span>
                     ${h.name}
                     ${!h.is_local ? '<span class="host-status disconnected" id="status-' + h.id + '"></span>' : ''}
+                    ${!h.is_local ? '<span class="host-tab-close" onclick="event.stopPropagation(); quickDeleteHost(\'' + h.id + '\', \'' + h.name.replace(/'/g, "\\'") + '\')" title="Remove host">✕</span>' : ''}
                 </button>
             `).join('');
             html += `<button class="host-tab-add" onclick="showAddHost()" title="Add host">＋</button>`;
@@ -879,6 +893,21 @@
             }
         }
         
+        async function quickDeleteHost(hostId, hostName) {
+            if (!confirm(`Delete host "${hostName}"?`)) return;
+            const result = await fetchAPI(`hosts/${hostId}`, { method: 'DELETE' });
+            if (result?.success) {
+                showToast(`Host "${hostName}" deleted`);
+                if (activeHostId === hostId) {
+                    activeHostId = 'local';
+                    refreshProjects();
+                }
+                await loadHosts();
+            } else {
+                showToast(result?.error || 'Failed to delete host', 'error');
+            }
+        }
+
         async function deleteCurrentHost() {
             const editId = document.getElementById('host-edit-id').value;
             const host = hosts.find(h => h.id === editId);
