@@ -183,6 +183,59 @@ Duptator can manage Docker projects across multiple machines. The local host (wh
 
 Remote hosts require SSH access. Scanning reads dependency files over SFTP, and rebuilds execute `docker compose` commands via SSH.
 
+<details>
+<summary><b>🪟 Enabling SSH on Windows</b></summary>
+
+The built-in `Add-WindowsCapability` method often hangs. The most reliable way is to install the **MSI package from GitHub**. Run this in an **elevated (Admin) PowerShell**:
+
+```powershell
+# Download the OpenSSH Server MSI
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$url = "https://github.com/PowerShell/Win32-OpenSSH/releases/download/v9.5.0.0p1-Beta/OpenSSH-Win64-v9.5.0.0.msi"
+Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\OpenSSH.msi"
+
+# Install silently
+Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\OpenSSH.msi`" /qn" -Wait
+
+# Start and enable the service
+Start-Service sshd
+Set-Service -Name sshd -StartupType Automatic
+
+# Verify it's running
+Get-Service sshd
+```
+
+Then in Duptator, add your Windows PC with:
+- **Hostname:** Your PC's IP (run `ipconfig` to find it)
+- **Port:** 22
+- **Username/Password:** Your Windows login credentials
+- **Projects Path:** e.g. `C:\Users\YourName\docker`
+
+</details>
+
+<details>
+<summary><b>🐧 Enabling SSH on Linux</b></summary>
+
+```bash
+sudo apt install openssh-server   # Debian/Ubuntu
+sudo systemctl enable --now ssh
+```
+
+</details>
+
+<details>
+<summary><b>🍎 Enabling SSH on Mac</b></summary>
+
+Go to **System Settings → General → Sharing** → enable **Remote Login**.
+
+Or via terminal:
+
+```bash
+sudo systemsetup -setremotelogin on
+```
+
+</details>
+
 ### Environment Variables
 
 | Variable | Description | Default |
