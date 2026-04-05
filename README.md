@@ -38,17 +38,18 @@ It also includes a **built-in malware detection database** that flags known comp
 
 | Feature | Description |
 |---------|-------------|
+| 🌐 **Multi-Host** | Manage Docker projects across Synology, Windows, Linux, and Mac hosts from one dashboard |
 | 🔍 **Scan** | Discover outdated packages across all Docker projects |
 | ⬆️ **Update All** | One-click bulk update with automatic backups |
 | 🎯 **Per-Package Update** | Expand any project row and update individual packages |
 | 🛡️ **Malware Detection** | Flags known compromised package versions from major supply chain attacks |
 | ⚠️ **Stale Detection** | Yellow flag warning for packages not updated in 6+ months |
 | ↩️ **Rollback** | Instantly restore previous dependency versions |
-| 🔨 **Rebuild** | Rebuild or pull + restart containers (auto-detects `build:` vs `image:`) |
+| 🔨 **Rebuild** | Rebuild or pull + restart containers locally or on remote hosts via SSH |
 | 📋 **Build Log Viewer** | Full terminal output from rebuild/pull shown in a syntax-highlighted modal |
 | 📊 **Progress Bars** | Real-time progress for scanning, updating, and rebuilding |
 | 🔔 **Rebuild Warnings** | Persistent banner reminding you which projects need a rebuild |
-| ⚙️ **Settings** | Configure projects path with built-in folder browser |
+| ⚙️ **Settings** | Configure projects path with built-in folder browser (local and remote) |
 
 ### Supported Package Managers
 
@@ -120,26 +121,30 @@ Navigate to **`http://your-server-ip:4554`**
 ## 🔧 How It Works
 
 ```
-┌─────────────────────────────────────────────┐
-│  Browser — http://your-ip:4554              │
-└───────────────────┬─────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│  Browser — http://your-ip:4554                  │
+│  ┌───────────────────────────────────────────┐  │
+│  │ 🗄️ Synology │ 🪟 Windows │ 🐧 Linux │ 🍎 Mac │  │
+│  └───────────────────────────────────────────┘  │
+└───────────────────┬─────────────────────────────┘
                     │
-┌───────────────────▼─────────────────────────┐
-│  Duptator Container                         │
-│                                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │  Scan    │  │  Update  │  │ Rollback │  │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  │
-│       │              │              │        │
-│  ┌────▼──────────────▼──────────────▼────┐  │
-│  │  Package Registry APIs               │  │
-│  │  PyPI · npm · Packagist · Go Proxy   │  │
-│  │  RubyGems · crates.io · Maven Central│  │
-│  │  NuGet · + publish date detection    │  │
-│  └───────────────────────────────────────┘  │
-│                                             │
-│  Mounted: /volume1/docker (your projects)   │
-└─────────────────────────────────────────────┘
+┌───────────────────▼─────────────────────────────┐
+│  Duptator Container                             │
+│                                                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│  │  Scan    │  │  Update  │  │ Rollback │      │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘      │
+│       │              │              │            │
+│  ┌────▼──────────────▼──────────────▼────────┐  │
+│  │  Package Registry APIs                   │  │
+│  │  PyPI · npm · Packagist · Go Proxy       │  │
+│  │  RubyGems · crates.io · Maven Central    │  │
+│  │  NuGet · Docker Hub · publish dates      │  │
+│  └───────────────────────────────────────────┘  │
+│                                                 │
+│  Local: /volume1/docker (mounted projects)      │
+│  Remote: SSH → Windows / Linux / Mac hosts      │
+└─────────────────────────────────────────────────┘
 ```
 
 | Action | What happens |
@@ -160,9 +165,23 @@ All settings are configurable from the **web UI**:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Projects Path | Root folder to scan for Docker projects | `/volume1/docker` |
+| Projects Path | Root folder to scan for Docker projects (per host) | `/volume1/docker` |
+| Hosts | Add remote hosts (Synology, Windows, Linux, Mac) via SSH | Local only |
 
 Settings are persisted in a Docker volume and survive container restarts.
+
+### Multi-Host Setup
+
+Duptator can manage Docker projects across multiple machines. The local host (where Duptator runs) is always available. To add remote hosts:
+
+1. Click the **＋** button in the host tabs bar
+2. Select the host type (🗄️ Synology, 🪟 Windows, 🐧 Linux, 🍎 Mac)
+3. Enter SSH connection details (hostname, port, username, password)
+4. Set the projects path on that host
+5. Click **🔌 Test** to verify the connection
+6. Click **💾 Save**
+
+Remote hosts require SSH access. Scanning reads dependency files over SFTP, and rebuilds execute `docker compose` commands via SSH.
 
 ### Environment Variables
 
@@ -178,11 +197,12 @@ Settings are persisted in a Docker volume and survive container restarts.
 
 | Component | Technology |
 |-----------|-----------|
-| Backend | Python 3.11 · Flask |
+| Backend | Python 3.11 · Flask · Paramiko (SSH) |
 | Frontend | Vanilla HTML · CSS · JavaScript |
 | Container | Docker · Docker Compose |
-| Version Checks | PyPI · npm · Packagist · Go Proxy · RubyGems · crates.io · Maven Central · NuGet |
-| Stale Detection | Publish date fetched from all 9 registries, flagged at 6+ months |
+| Remote Access | SSH / SFTP via Paramiko |
+| Version Checks | PyPI · npm · Packagist · Go Proxy · RubyGems · crates.io · Maven Central · NuGet · Docker Hub |
+| Stale Detection | Publish date fetched from all registries, flagged at 6+ months |
 
 ---
 

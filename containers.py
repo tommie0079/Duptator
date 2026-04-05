@@ -1,5 +1,6 @@
 """
 Docker container rebuild logic (including self-rebuild).
+Supports local and remote (SSH) Docker operations.
 """
 
 import os
@@ -8,7 +9,7 @@ import subprocess
 import logging
 from typing import Dict
 
-from models import Project
+from models import Project, Host
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +91,11 @@ def _self_rebuild(project: Project) -> Dict:
         return {"success": False, "message": str(e), "log": ""}
 
 
-def rebuild_container(project: Project) -> Dict:
-    """Rebuild a Docker container."""
+def rebuild_container(project: Project, host: Host = None) -> Dict:
+    """Rebuild a Docker container. Uses SSH for remote hosts."""
+    if host and not host.is_local:
+        return _rebuild_remote(project, host)
+
     if not project.docker_compose_file:
         return {"success": False, "message": "No docker-compose file found", "log": ""}
 
@@ -173,6 +177,86 @@ def rebuild_container(project: Project) -> Dict:
     except subprocess.TimeoutExpired:
         log_lines.append("\n=== TIMEOUT ===\n")
         return {"success": False, "message": "Operation timed out", "log": "\n".join(log_lines)}
+    except Exception as e:
+        log_lines.append(f"\n=== ERROR: {e} ===\n")
+        return {"success": False, "message": str(e), "log": "\n".join(log_lines)}
+
+
+def _has_build_directive_remote(host: Host, compose_file: str) -> bool:
+    """Check if compose file uses 'build:' on a remote host."""
+    from ssh_client import ssh_read_file
+    content = ssh_read_file(host, compose_file)
+    if content:
+        return bool(re.search(r'^\s+build:', content, re.MULTILINE))
+    return False
+
+
+def _rebuild_remote(project: Project, host: Host) -> Dict:
+    """Rebuild a Docker container on a remote host via SSH."""
+    from ssh_client import ssh_exec
+
+    if not project.docker_compose_file:
+        return {"success": False, "message": "No docker-compose file found", "log": ""}
+
+    docker_cmd = host.docker_cmd
+    compose_file = project.docker_compose_file
+    cwd = project.path
+    uses_build = _has_build_directive_remote(host, compose_file)
+    log_lines = []
+
+    # On Synology, docker commands may need sudo
+    sudo = ""
+    if host.host_type == "synology":
+        sudo = "sudo "
+
+    try:
+        for compose_cmd in [f"{docker_cmd} compose", "docker-compose"]:
+            if uses_build:
+                log_lines.append(f"=== Building {project.name} (Dockerfile) on {host.name} ===\n")
+                cmd = f'{sudo}{compose_cmd} -f "{compose_file}" build --no-cache'
+                out, err, rc = ssh_exec(host, cmd, cwd=cwd, timeout=600)
+                log_lines.append(f"$ {cmd}\n")
+                if out: log_lines.append(out)
+                if err: log_lines.append(err)
+                if rc != 0:
+                    if "is not a docker command" in (err or ""):
+                        log_lines.clear()
+                        continue
+                    return {"success": False, "message": "Build failed", "log": "\n".join(log_lines)}
+            else:
+                log_lines.append(f"=== Pulling latest images for {project.name} on {host.name} ===\n")
+                cmd = f'{sudo}{compose_cmd} -f "{compose_file}" pull'
+                out, err, rc = ssh_exec(host, cmd, cwd=cwd, timeout=300)
+                log_lines.append(f"$ {cmd}\n")
+                if out: log_lines.append(out)
+                if err: log_lines.append(err)
+                if rc != 0:
+                    if "is not a docker command" in (err or ""):
+                        log_lines.clear()
+                        continue
+                    return {"success": False, "message": "Pull failed", "log": "\n".join(log_lines)}
+
+            log_lines.append(f"\n=== Restarting {project.name} on {host.name} ===\n")
+            cmd = f'{sudo}{compose_cmd} -f "{compose_file}" down --remove-orphans'
+            out, err, rc = ssh_exec(host, cmd, cwd=cwd, timeout=120)
+            log_lines.append(f"$ {cmd}\n")
+            if out: log_lines.append(out)
+            if err: log_lines.append(err)
+
+            cmd = f'{sudo}{compose_cmd} -f "{compose_file}" up -d'
+            out, err, rc = ssh_exec(host, cmd, cwd=cwd, timeout=120)
+            log_lines.append(f"$ {cmd}\n")
+            if out: log_lines.append(out)
+            if err: log_lines.append(err)
+
+            if rc == 0:
+                action = "rebuilt" if uses_build else "pulled & restarted"
+                log_lines.append(f"\n=== Done — {action} successfully on {host.name} ===\n")
+                return {"success": True, "message": f"Container {action} successfully", "log": "\n".join(log_lines)}
+            else:
+                return {"success": False, "message": "Restart failed", "log": "\n".join(log_lines)}
+
+        return {"success": False, "message": "Docker compose not available on remote host", "log": "\n".join(log_lines)}
     except Exception as e:
         log_lines.append(f"\n=== ERROR: {e} ===\n")
         return {"success": False, "message": str(e), "log": "\n".join(log_lines)}

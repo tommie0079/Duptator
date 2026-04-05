@@ -2,22 +2,24 @@
 Package scanning / outdated-detection for all supported package managers.
 """
 
+import os
 import re
 import json
 import logging
+import tempfile
 import urllib.request
 import urllib.error
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Callable
 
-from models import Package, PackageManager, Project
+from models import Package, PackageManager, Project, Host
 
 logger = logging.getLogger(__name__)
 
 
 # ---- PIP (Python) ----
 
-def check_pip_outdated(project: Project) -> List[Package]:
+def check_pip_outdated(project: Project, file_reader=None) -> List[Package]:
     """Check for outdated pip packages."""
     packages = []
 
@@ -25,13 +27,11 @@ def check_pip_outdated(project: Project) -> List[Package]:
         logger.warning(f"No dependency file for {project.name}")
         return packages
 
-    try:
-        with open(project.dependency_file, 'r') as f:
-            lines = f.readlines()
-        logger.info(f"Read {len(lines)} lines from {project.dependency_file}")
-    except IOError as e:
-        logger.error(f"Failed to read {project.dependency_file}: {e}")
+    content = _read_file(project.dependency_file, file_reader)
+    if content is None:
         return packages
+    lines = content.splitlines(keepends=True)
+    logger.info(f"Read {len(lines)} lines from {project.dependency_file}")
 
     for line in lines:
         line = line.strip()
@@ -81,7 +81,7 @@ def _get_pip_latest(package_name: str) -> tuple:
 
 # ---- NPM (JavaScript) ----
 
-def check_npm_outdated(project: Project) -> List[Package]:
+def check_npm_outdated(project: Project, file_reader=None) -> List[Package]:
     """Check for outdated npm packages."""
     packages = []
 
@@ -89,12 +89,14 @@ def check_npm_outdated(project: Project) -> List[Package]:
         logger.warning(f"No dependency file for {project.name}")
         return packages
 
+    content = _read_file(project.dependency_file, file_reader)
+    if content is None:
+        return packages
     try:
-        with open(project.dependency_file, 'r') as f:
-            pkg_json = json.load(f)
+        pkg_json = json.loads(content)
         logger.info(f"Loaded package.json for {project.name}")
-    except (json.JSONDecodeError, IOError) as e:
-        logger.error(f"Failed to read package.json: {e}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse package.json: {e}")
         return packages
 
     all_deps = {}
@@ -142,7 +144,7 @@ def _get_npm_latest(package_name: str) -> tuple:
 
 # ---- Composer (PHP) ----
 
-def check_composer_outdated(project: Project) -> List[Package]:
+def check_composer_outdated(project: Project, file_reader=None) -> List[Package]:
     """Check for outdated composer packages."""
     packages = []
 
@@ -150,12 +152,14 @@ def check_composer_outdated(project: Project) -> List[Package]:
         logger.warning(f"No dependency file for {project.name}")
         return packages
 
+    content = _read_file(project.dependency_file, file_reader)
+    if content is None:
+        return packages
     try:
-        with open(project.dependency_file, 'r') as f:
-            composer_json = json.load(f)
+        composer_json = json.loads(content)
         logger.info(f"Loaded composer.json for {project.name}")
-    except (json.JSONDecodeError, IOError) as e:
-        logger.error(f"Failed to read composer.json: {e}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse composer.json: {e}")
         return packages
 
     all_deps = {}
@@ -206,16 +210,13 @@ def _get_composer_latest(package_name: str) -> tuple:
 
 # ---- Go modules ----
 
-def check_go_outdated(project: Project) -> List[Package]:
+def check_go_outdated(project: Project, file_reader=None) -> List[Package]:
     """Check for outdated Go modules."""
     packages = []
     if not project.dependency_file:
         return packages
-    try:
-        with open(project.dependency_file, 'r') as f:
-            content = f.read()
-    except IOError as e:
-        logger.error(f"Failed to read go.mod: {e}")
+    content = _read_file(project.dependency_file, file_reader)
+    if content is None:
         return packages
 
     in_require = False
@@ -261,17 +262,15 @@ def _get_go_latest(module_name: str) -> tuple:
 
 # ---- Ruby Bundler ----
 
-def check_bundler_outdated(project: Project) -> List[Package]:
+def check_bundler_outdated(project: Project, file_reader=None) -> List[Package]:
     """Check for outdated Ruby gems."""
     packages = []
     if not project.dependency_file:
         return packages
-    try:
-        with open(project.dependency_file, 'r') as f:
-            lines = f.readlines()
-    except IOError as e:
-        logger.error(f"Failed to read Gemfile: {e}")
+    content = _read_file(project.dependency_file, file_reader)
+    if content is None:
         return packages
+    lines = content.splitlines(keepends=True)
 
     for line in lines:
         stripped = line.strip()
@@ -309,16 +308,13 @@ def _get_gem_latest(gem_name: str) -> tuple:
 
 # ---- Rust Cargo ----
 
-def check_cargo_outdated(project: Project) -> List[Package]:
+def check_cargo_outdated(project: Project, file_reader=None) -> List[Package]:
     """Check for outdated Rust crates."""
     packages = []
     if not project.dependency_file:
         return packages
-    try:
-        with open(project.dependency_file, 'r') as f:
-            content = f.read()
-    except IOError as e:
-        logger.error(f"Failed to read Cargo.toml: {e}")
+    content = _read_file(project.dependency_file, file_reader)
+    if content is None:
         return packages
 
     in_deps = False
@@ -367,16 +363,13 @@ def _get_crate_latest(crate_name: str) -> tuple:
 
 # ---- Maven ----
 
-def check_maven_outdated(project: Project) -> List[Package]:
+def check_maven_outdated(project: Project, file_reader=None) -> List[Package]:
     """Check for outdated Maven dependencies."""
     packages = []
     if not project.dependency_file:
         return packages
-    try:
-        with open(project.dependency_file, 'r') as f:
-            content = f.read()
-    except IOError as e:
-        logger.error(f"Failed to read pom.xml: {e}")
+    content = _read_file(project.dependency_file, file_reader)
+    if content is None:
         return packages
 
     dep_pattern = re.compile(
@@ -420,16 +413,13 @@ def _get_maven_latest(group_id: str, artifact_id: str) -> tuple:
 
 # ---- Gradle ----
 
-def check_gradle_outdated(project: Project) -> List[Package]:
+def check_gradle_outdated(project: Project, file_reader=None) -> List[Package]:
     """Check for outdated Gradle dependencies."""
     packages = []
     if not project.dependency_file:
         return packages
-    try:
-        with open(project.dependency_file, 'r') as f:
-            content = f.read()
-    except IOError as e:
-        logger.error(f"Failed to read build.gradle: {e}")
+    content = _read_file(project.dependency_file, file_reader)
+    if content is None:
         return packages
 
     dep_pattern = re.compile(
@@ -449,16 +439,13 @@ def check_gradle_outdated(project: Project) -> List[Package]:
 
 # ---- NuGet (.NET) ----
 
-def check_nuget_outdated(project: Project) -> List[Package]:
+def check_nuget_outdated(project: Project, file_reader=None) -> List[Package]:
     """Check for outdated NuGet packages."""
     packages = []
     if not project.dependency_file:
         return packages
-    try:
-        with open(project.dependency_file, 'r') as f:
-            content = f.read()
-    except IOError as e:
-        logger.error(f"Failed to read .csproj: {e}")
+    content = _read_file(project.dependency_file, file_reader)
+    if content is None:
         return packages
 
     ref_pattern = re.compile(
@@ -516,17 +503,14 @@ def _get_nuget_date(package_name: str, version: str) -> Optional[str]:
 
 # ---- Docker images ----
 
-def check_docker_outdated(project: Project) -> List[Package]:
+def check_docker_outdated(project: Project, file_reader=None) -> List[Package]:
     """Check for outdated Docker images in docker-compose file."""
     packages = []
     compose_file = project.docker_compose_file
     if not compose_file:
         return packages
-    try:
-        with open(compose_file, 'r') as f:
-            content = f.read()
-    except IOError as e:
-        logger.error(f"Failed to read compose file: {e}")
+    content = _read_file(compose_file, file_reader)
+    if content is None:
         return packages
 
     image_pattern = re.compile(r'^\s*image:\s*([^\s#]+)', re.MULTILINE)
@@ -624,8 +608,15 @@ def _get_docker_latest(image_name: str, current_tag: str) -> tuple:
 
 # ---- Project discovery & scanning ----
 
-def discover_projects(workspace_path) -> List[Project]:
-    """Discover all Docker projects in the workspace."""
+def discover_projects(workspace_path, host: Host = None) -> List[Project]:
+    """Discover all Docker projects. Uses SSH for remote hosts."""
+    if host and not host.is_local:
+        return _discover_projects_remote(host)
+    return _discover_projects_local(workspace_path, host_id=host.id if host else None)
+
+
+def _discover_projects_local(workspace_path, host_id: str = None) -> List[Project]:
+    """Discover all Docker projects in the local workspace."""
     from pathlib import Path
     projects = []
     ws = Path(workspace_path)
@@ -645,7 +636,8 @@ def discover_projects(workspace_path) -> List[Project]:
             project = Project(
                 name=project_name,
                 path=str(project_path),
-                docker_compose_file=str(compose_file)
+                docker_compose_file=str(compose_file),
+                host_id=host_id,
             )
 
             if (project_path / "requirements.txt").exists():
@@ -685,9 +677,79 @@ def discover_projects(workspace_path) -> List[Project]:
     return sorted(projects, key=lambda p: (p.package_manager is None, p.name.lower()))
 
 
-def scan_project(project: Project) -> Project:
+def _discover_projects_remote(host: Host) -> List[Project]:
+    """Discover Docker projects on a remote host via SSH."""
+    from ssh_client import ssh_find_compose_files, ssh_file_exists_in_dir, ssh_glob_in_dir
+
+    compose_files = ssh_find_compose_files(host, host.projects_path)
+    projects = []
+    seen_paths = set()
+    sep = "\\" if host.host_type == "windows" else "/"
+
+    dep_file_map = [
+        ("requirements.txt", PackageManager.PIP.value),
+        ("package.json", PackageManager.NPM.value),
+        ("composer.json", PackageManager.COMPOSER.value),
+        ("go.mod", PackageManager.GO.value),
+        ("Gemfile", PackageManager.BUNDLER.value),
+        ("Cargo.toml", PackageManager.CARGO.value),
+        ("pom.xml", PackageManager.MAVEN.value),
+        ("build.gradle", PackageManager.GRADLE.value),
+    ]
+
+    for compose_file in compose_files:
+        if host.host_type == "windows":
+            project_path = compose_file.rsplit("\\", 1)[0]
+            project_name = project_path.rsplit("\\", 1)[-1]
+        else:
+            project_path = compose_file.rsplit("/", 1)[0]
+            project_name = project_path.rsplit("/", 1)[-1]
+
+        if project_path in seen_paths:
+            continue
+        seen_paths.add(project_path)
+
+        project = Project(
+            name=project_name,
+            path=project_path,
+            docker_compose_file=compose_file,
+            host_id=host.id,
+        )
+
+        # Detect package manager
+        found = False
+        for dep_filename, pm_value in dep_file_map:
+            if ssh_file_exists_in_dir(host, project_path, dep_filename):
+                project.package_manager = pm_value
+                project.dependency_file = f"{project_path}{sep}{dep_filename}"
+                found = True
+                break
+
+        if not found:
+            # Check for .csproj
+            csproj = ssh_glob_in_dir(host, project_path, "*.csproj")
+            if csproj:
+                project.package_manager = PackageManager.NUGET.value
+                project.dependency_file = f"{project_path}{sep}{csproj[0]}"
+                found = True
+
+        if not found:
+            project.package_manager = PackageManager.DOCKER.value
+            project.dependency_file = compose_file
+
+        projects.append(project)
+
+    return sorted(projects, key=lambda p: (p.package_manager is None, p.name.lower()))
+
+
+def scan_project(project: Project, host: Host = None) -> Project:
     """Scan a single project for outdated packages."""
     logger.info(f"Scanning project: {project.name} (manager: {project.package_manager})")
+
+    # For remote hosts, download dependency file to temp and scan locally
+    file_reader = None
+    if host and not host.is_local:
+        file_reader = _make_remote_reader(host)
 
     scan_map = {
         PackageManager.PIP.value: check_pip_outdated,
@@ -704,11 +766,11 @@ def scan_project(project: Project) -> Project:
 
     checker = scan_map.get(project.package_manager)
     if checker:
-        project.packages = checker(project)
+        project.packages = checker(project, file_reader=file_reader)
 
     # For non-docker projects, also scan docker images from compose file
     if project.package_manager != PackageManager.DOCKER.value:
-        docker_pkgs = check_docker_outdated(project)
+        docker_pkgs = check_docker_outdated(project, file_reader=file_reader)
         if docker_pkgs:
             project.packages.extend(docker_pkgs)
 
@@ -716,3 +778,24 @@ def scan_project(project: Project) -> Project:
     project.last_scan = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logger.info(f"Scan complete for {project.name}: {len(project.packages)} packages, {project.outdated_count} outdated")
     return project
+
+
+def _make_remote_reader(host: Host):
+    """Create a file reader function for remote hosts."""
+    from ssh_client import ssh_read_file
+
+    def reader(path):
+        return ssh_read_file(host, path)
+    return reader
+
+
+def _read_file(path: str, file_reader=None) -> Optional[str]:
+    """Read a file, locally or via file_reader."""
+    if file_reader:
+        return file_reader(path)
+    try:
+        with open(path, 'r') as f:
+            return f.read()
+    except IOError as e:
+        logger.error(f"Failed to read {path}: {e}")
+        return None

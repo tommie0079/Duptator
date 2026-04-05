@@ -449,6 +449,101 @@
         }
         .log-status.success { background: #238636; color: white; }
         .log-status.failed { background: #da3633; color: white; }
+        
+        /* Host tabs */
+        .host-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 16px;
+            border-bottom: 2px solid var(--border);
+            overflow-x: auto;
+        }
+        .host-tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            white-space: nowrap;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .host-tab:hover { color: var(--text-primary); background: rgba(177,186,196,0.04); }
+        .host-tab.active {
+            color: var(--text-primary);
+            border-bottom-color: var(--accent);
+            font-weight: 600;
+        }
+        .host-tab .host-type-icon { font-size: 16px; }
+        .host-tab-add {
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 18px;
+            color: var(--text-secondary);
+            background: none;
+            border: none;
+            margin-bottom: -2px;
+            transition: color 0.2s;
+        }
+        .host-tab-add:hover { color: var(--accent); }
+        .host-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .host-status.connected { background: var(--success); }
+        .host-status.disconnected { background: var(--text-secondary); }
+        .host-status.error { background: var(--error); }
+
+        /* Host modal */
+        .host-form .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .host-form .form-row.full { grid-template-columns: 1fr; }
+        .host-type-selector {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .host-type-option {
+            padding: 12px 8px;
+            text-align: center;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg-primary);
+        }
+        .host-type-option:hover { border-color: var(--accent); }
+        .host-type-option.selected { border-color: var(--accent); background: rgba(47,129,247,0.1); }
+        .host-type-option .icon { font-size: 24px; display: block; margin-bottom: 4px; }
+        .host-type-option .label { font-size: 12px; font-weight: 600; }
+        
+        .ssh-fields { 
+            border: 1px solid var(--border); 
+            border-radius: 8px; 
+            padding: 16px; 
+            margin-top: 12px;
+            background: rgba(0,0,0,0.15);
+        }
+        .ssh-fields-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
     </style>
 </head>
 <body>
@@ -476,6 +571,8 @@
                 <button class="btn btn-secondary" onclick="showSettings()">⚙️ Settings</button>
             </div>
         </header>
+        
+        <div class="host-tabs" id="host-tabs"></div>
         
         <div class="stats">
             <div class="stat-card">
@@ -555,7 +652,7 @@
             <div class="settings-body">
                 <div class="form-group">
                     <label>Projects Directory</label>
-                    <p class="form-help">Path to your Docker projects folder</p>
+                    <p class="form-help">Path to your Docker projects folder on the current host</p>
                     <div class="path-input-group">
                         <input type="text" id="projects-path" class="form-input" placeholder="/volume1/docker">
                         <button class="btn btn-secondary" onclick="browsePath()">📁 Browse</button>
@@ -579,8 +676,245 @@
         </div>
     </div>
 
+    <!-- Host management modal -->
+    <div class="modal" id="host-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="host-modal-title">➕ Add Host</h2>
+                <button class="modal-close" onclick="closeModal('host-modal')">&times;</button>
+            </div>
+            <div class="host-form">
+                <input type="hidden" id="host-edit-id">
+                <div class="form-group">
+                    <label>Host Type</label>
+                    <div class="host-type-selector" id="host-type-selector">
+                        <div class="host-type-option" data-type="synology" onclick="selectHostType('synology')">
+                            <span class="icon">🗄️</span>
+                            <span class="label">Synology</span>
+                        </div>
+                        <div class="host-type-option" data-type="windows" onclick="selectHostType('windows')">
+                            <span class="icon">🪟</span>
+                            <span class="label">Windows</span>
+                        </div>
+                        <div class="host-type-option" data-type="linux" onclick="selectHostType('linux')">
+                            <span class="icon">🐧</span>
+                            <span class="label">Linux</span>
+                        </div>
+                        <div class="host-type-option" data-type="mac" onclick="selectHostType('mac')">
+                            <span class="icon">🍎</span>
+                            <span class="label">Mac</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Host Name</label>
+                    <input type="text" id="host-name" class="form-input" placeholder="e.g. Windows PC">
+                </div>
+                <div class="ssh-fields" id="ssh-fields">
+                    <div class="ssh-fields-title">🔑 SSH Connection</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Hostname / IP</label>
+                            <input type="text" id="host-hostname" class="form-input" placeholder="192.168.1.100">
+                        </div>
+                        <div class="form-group">
+                            <label>SSH Port</label>
+                            <input type="number" id="host-port" class="form-input" value="22">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" id="host-username" class="form-input" placeholder="admin">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="host-password" class="form-input" placeholder="••••••••">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top: 16px;">
+                    <label>Projects Path</label>
+                    <p class="form-help">Path to Docker projects folder on this host</p>
+                    <input type="text" id="host-projects-path" class="form-input" placeholder="/home/user/docker">
+                </div>
+                <div class="settings-actions" style="display: flex; gap: 10px; justify-content: space-between;">
+                    <div>
+                        <button class="btn btn-error btn-sm" id="host-delete-btn" onclick="deleteCurrentHost()" style="display:none;">🗑️ Delete</button>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-secondary" id="host-test-btn" onclick="testHostConnection()" style="display:none;">🔌 Test</button>
+                        <button class="btn btn-primary" onclick="saveHost()">💾 Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let projects = [];
+        let hosts = [];
+        let activeHostId = 'local';
+        
+        // ---- Host management ----
+        
+        async function loadHosts() {
+            const data = await fetchAPI('hosts');
+            if (data) {
+                hosts = data.hosts || [];
+                activeHostId = data.active_host_id || 'local';
+                renderHostTabs();
+            }
+        }
+        
+        function renderHostTabs() {
+            const container = document.getElementById('host-tabs');
+            let html = hosts.map(h => `
+                <button class="host-tab ${h.id === activeHostId ? 'active' : ''}" onclick="switchHost('${h.id}')" ondblclick="editHost('${h.id}')">
+                    <span class="host-type-icon">${h.icon}</span>
+                    ${h.name}
+                    ${!h.is_local ? '<span class="host-status disconnected" id="status-' + h.id + '"></span>' : ''}
+                </button>
+            `).join('');
+            html += `<button class="host-tab-add" onclick="showAddHost()" title="Add host">＋</button>`;
+            container.innerHTML = html;
+        }
+        
+        async function switchHost(hostId) {
+            if (hostId === activeHostId) return;
+            activeHostId = hostId;
+            await fetchAPI('hosts/active', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host_id: hostId }) });
+            renderHostTabs();
+            refreshProjects();
+        }
+        
+        function hostParam() {
+            return `host=${activeHostId}`;
+        }
+        
+        function showAddHost() {
+            document.getElementById('host-modal-title').textContent = '➕ Add Host';
+            document.getElementById('host-edit-id').value = '';
+            document.getElementById('host-name').value = '';
+            document.getElementById('host-hostname').value = '';
+            document.getElementById('host-port').value = '22';
+            document.getElementById('host-username').value = '';
+            document.getElementById('host-password').value = '';
+            document.getElementById('host-projects-path').value = '';
+            document.getElementById('host-delete-btn').style.display = 'none';
+            document.getElementById('host-test-btn').style.display = 'none';
+            selectHostType('linux');
+            document.getElementById('host-modal').classList.add('active');
+        }
+        
+        function editHost(hostId) {
+            const host = hosts.find(h => h.id === hostId);
+            if (!host) return;
+            document.getElementById('host-modal-title').textContent = `✏️ Edit Host — ${host.name}`;
+            document.getElementById('host-edit-id').value = host.id;
+            document.getElementById('host-name').value = host.name;
+            document.getElementById('host-hostname').value = host.hostname;
+            document.getElementById('host-port').value = host.port || 22;
+            document.getElementById('host-username').value = host.username;
+            document.getElementById('host-password').value = '';
+            document.getElementById('host-password').placeholder = host.has_password ? '(unchanged)' : '••••••••';
+            document.getElementById('host-projects-path').value = host.projects_path;
+            document.getElementById('host-delete-btn').style.display = host.is_local ? 'none' : 'inline-flex';
+            document.getElementById('host-test-btn').style.display = host.is_local ? 'none' : 'inline-flex';
+            selectHostType(host.host_type);
+            // Hide SSH fields for local host
+            document.getElementById('ssh-fields').style.display = host.is_local ? 'none' : 'block';
+            document.getElementById('host-modal').classList.add('active');
+        }
+        
+        function selectHostType(type) {
+            document.querySelectorAll('.host-type-option').forEach(el => {
+                el.classList.toggle('selected', el.dataset.type === type);
+            });
+            // Show path placeholder per type
+            const pathInput = document.getElementById('host-projects-path');
+            const placeholders = { synology: '/volume1/docker', windows: 'C:\\Users\\you\\docker', linux: '/home/user/docker', mac: '/Users/you/docker' };
+            pathInput.placeholder = placeholders[type] || '/docker';
+            // Show SSH fields for non-local hosts
+            const editId = document.getElementById('host-edit-id').value;
+            const isLocal = editId && hosts.find(h => h.id === editId)?.is_local;
+            if (!isLocal) {
+                document.getElementById('ssh-fields').style.display = 'block';
+            }
+        }
+        
+        function getSelectedHostType() {
+            const selected = document.querySelector('.host-type-option.selected');
+            return selected ? selected.dataset.type : 'linux';
+        }
+        
+        async function saveHost() {
+            const data = {
+                host_type: getSelectedHostType(),
+                name: document.getElementById('host-name').value.trim(),
+                hostname: document.getElementById('host-hostname').value.trim(),
+                port: parseInt(document.getElementById('host-port').value) || 22,
+                username: document.getElementById('host-username').value.trim(),
+                projects_path: document.getElementById('host-projects-path').value.trim(),
+            };
+            const password = document.getElementById('host-password').value;
+            if (password) data.password = password;
+            
+            const editId = document.getElementById('host-edit-id').value;
+            if (editId) data.id = editId;
+            
+            if (!data.name) { showToast('Enter a host name', 'error'); return; }
+            
+            const result = await fetchAPI('hosts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+            if (result?.success) {
+                showToast(`Host "${data.name}" saved!`);
+                closeModal('host-modal');
+                await loadHosts();
+                if (!editId) {
+                    // Auto-switch to new host
+                    switchHost(result.host.id);
+                }
+            } else {
+                showToast(result?.error || 'Failed to save host', 'error');
+            }
+        }
+        
+        async function deleteCurrentHost() {
+            const editId = document.getElementById('host-edit-id').value;
+            const host = hosts.find(h => h.id === editId);
+            if (!host || host.is_local) return;
+            if (!confirm(`Delete host "${host.name}"? This cannot be undone.`)) return;
+            const result = await fetchAPI(`hosts/${editId}`, { method: 'DELETE' });
+            if (result?.success) {
+                showToast(`Host "${host.name}" deleted`);
+                closeModal('host-modal');
+                activeHostId = 'local';
+                await loadHosts();
+                refreshProjects();
+            } else {
+                showToast(result?.error || 'Failed to delete host', 'error');
+            }
+        }
+        
+        async function testHostConnection() {
+            const editId = document.getElementById('host-edit-id').value;
+            if (!editId) { showToast('Save the host first', 'warning'); return; }
+            const btn = document.getElementById('host-test-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Testing...';
+            const result = await fetchAPI(`hosts/${editId}/test`, { method: 'POST' });
+            btn.disabled = false;
+            btn.textContent = '🔌 Test';
+            if (result?.success) {
+                showToast('Connection successful!', 'success');
+                const dot = document.getElementById(`status-${editId}`);
+                if (dot) { dot.className = 'host-status connected'; }
+            } else {
+                showToast(`Connection failed: ${result?.message || 'Unknown error'}`, 'error');
+                const dot = document.getElementById(`status-${editId}`);
+                if (dot) { dot.className = 'host-status error'; }
+            }
+        }
         
         // Track projects that need rebuilding (persists across page refreshes)
         function getPendingRebuilds() {
@@ -623,7 +957,12 @@
         
         async function fetchAPI(endpoint, options = {}) {
             try {
-                const response = await fetch(`/api/${endpoint}`, options);
+                // Add host param to GET requests
+                let url = `/api/${endpoint}`;
+                if (!options.method || options.method === 'GET') {
+                    url += (url.includes('?') ? '&' : '?') + hostParam();
+                }
+                const response = await fetch(url, options);
                 return await response.json();
             } catch (error) {
                 console.error('API Error:', error);
@@ -1035,7 +1374,7 @@
         async function loadFolders(path) {
             document.getElementById('current-browse-path').textContent = path;
             document.getElementById('folder-list').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-            const result = await fetchAPI(`browse?path=${encodeURIComponent(path)}`);
+            const result = await fetchAPI(`browse?path=${encodeURIComponent(path)}&${hostParam()}`);
             if (result?.folders) {
                 currentBrowsePath = result.current_path;
                 document.getElementById('current-browse-path').textContent = currentBrowsePath;
@@ -1049,7 +1388,7 @@
         
         document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m && m.id !== 'log-modal') m.classList.remove('active'); }));
         updateRebuildBanner();
-        refreshProjects();
+        loadHosts().then(() => refreshProjects());
     </script>
 </body>
 </html>

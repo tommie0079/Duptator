@@ -2,10 +2,87 @@
 Data models for Docker Package Updater.
 """
 
+import uuid
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional
+
+
+class HostType(Enum):
+    SYNOLOGY = "synology"
+    WINDOWS = "windows"
+    LINUX = "linux"
+    MAC = "mac"
+
+
+HOST_ICONS = {
+    "synology": "🗄️",
+    "windows": "🪟",
+    "linux": "🐧",
+    "mac": "🍎",
+}
+
+# Docker command paths per host type
+DOCKER_CMD = {
+    "synology": "/usr/local/bin/docker",
+    "windows": "docker",
+    "linux": "docker",
+    "mac": "docker",
+}
+
+
+@dataclass
+class Host:
+    name: str
+    host_type: str  # synology, windows, linux, mac
+    hostname: str = ""  # IP or hostname for SSH (empty = local)
+    port: int = 22
+    username: str = ""
+    password: str = ""
+    projects_path: str = ""
+    is_local: bool = False
+    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+
+    @property
+    def icon(self) -> str:
+        return HOST_ICONS.get(self.host_type, "🖥️")
+
+    @property
+    def docker_cmd(self) -> str:
+        return DOCKER_CMD.get(self.host_type, "docker")
+
+    def to_dict(self, redact_password: bool = True):
+        d = {
+            "id": self.id,
+            "name": self.name,
+            "host_type": self.host_type,
+            "icon": self.icon,
+            "hostname": self.hostname,
+            "port": self.port,
+            "username": self.username,
+            "projects_path": self.projects_path,
+            "is_local": self.is_local,
+        }
+        if not redact_password:
+            d["password"] = self.password
+        else:
+            d["has_password"] = bool(self.password)
+        return d
+
+    @staticmethod
+    def from_dict(data: dict) -> 'Host':
+        return Host(
+            id=data.get("id", str(uuid.uuid4())[:8]),
+            name=data.get("name", ""),
+            host_type=data.get("host_type", "linux"),
+            hostname=data.get("hostname", ""),
+            port=data.get("port", 22),
+            username=data.get("username", ""),
+            password=data.get("password", ""),
+            projects_path=data.get("projects_path", ""),
+            is_local=data.get("is_local", False),
+        )
 
 
 class PackageManager(Enum):
@@ -134,6 +211,7 @@ class Project:
     packages: List[Package] = field(default_factory=list)
     status: str = "unknown"
     last_scan: Optional[str] = None
+    host_id: Optional[str] = None
 
     @property
     def outdated_count(self) -> int:
@@ -160,5 +238,6 @@ class Project:
             "vulnerable_count": self.vulnerable_count,
             "total_packages": len(self.packages),
             "status": self.status,
-            "last_scan": self.last_scan
+            "last_scan": self.last_scan,
+            "host_id": self.host_id
         }
